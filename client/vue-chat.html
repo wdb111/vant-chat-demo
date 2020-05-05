@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <!-- 引入样式文件 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vant@2.6/lib/index.css" />
+    <!-- 引入样式 -->
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <style>
+        html,
+        body {
+            padding: 0;
+            margin: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #app {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .message {
+            width: 100%;
+            height: calc(100% - 46px);
+            padding: 0 20px 20px 20px;
+            box-sizing: border-box;
+            border: 1px solid #eee;
+            background-color: rgb(71, 70, 70);
+        }
+
+        .login {
+            width: 100%;
+            position: absolute;
+            text-align: center;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .title {
+            text-align: center;
+            padding: 20px 0;
+            box-sizing: border-box;
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+            background-color: #000;
+        }
+
+        .chat {
+            height: 100%;
+        }
+
+        h3,h2 {
+            color: #fff;
+            text-align: center;
+        }
+
+        .box {
+            height: calc(100% - 100px);
+            overflow-y: auto;
+            background-color: #fff;
+        }
+
+        .msg-box {
+            padding: 10px 0;
+        }
+
+        .msg,
+        .user {
+            display: inline-block;
+        }
+
+        .user {
+            width: 33px;
+            height: 33px;
+            text-align: center;
+            line-height: 33px;
+            font-size: 12px;
+            border-radius: 50%;
+            color: rgb(3, 3, 3);
+            background-color: #ffe180;
+        }
+
+        .msg {
+            padding: 5px 10px;
+            box-sizing: border-box;
+            color: #333;
+            background-color: rgb(70, 236, 48);
+            border-radius: 10px;
+        }
+        .other {
+            
+            background-color: #fff;
+            border: 1px solid #eee;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div v-if="loginShow" class="title">用户登录</div>
+        <div v-if="loginShow" class="login">
+
+            <div style="width: 200px;border: 1px solid #eee;margin: 20px auto;">
+                <van-field v-model="sendMsg.userName" placeholder="请输入昵称" />
+            </div>
+            <div>
+                <van-button @click="submit" style="width: 200px;" type="primary">登录</van-button>
+            </div>
+        </div>
+        <div v-if="!loginShow" class="chat">
+            <div class="message">
+                <h2>聊天室</h2>
+                <h3>房间人数：{{userNum}}</h3>
+                <div class="box">
+                    <div v-if="newUser" style="text-align: center; font-size: 12px;color: #9d9999;">{{newUser}}：加入房间</div>
+                    <div class="msg-box" v-for="(item,index) in messageList" :key="index">
+                        <div style="text-align: right;" v-if="localname===item.userName"><span
+                                class="msg">{{item.msg}}</span> <span class="user">我 </span>
+                        </div>
+                        <div v-else>
+                            <span class="user">{{item.userName}} </span> <span class="msg other">{{item.msg}}</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div>
+                <div style="display: inline-block; width: 308px;border: 1px solid #eee;">
+                    <van-field v-model="sendMsg.msg" placeholder="请输入..." />
+                </div>
+
+                <van-button type="primary" @click="sendOut" :disabled="sendMsg.msg===''">发送</van-button>
+
+            </div>
+        </div>
+
+
+    </div>
+    <script src="https://cdn.bootcdn.net/ajax/libs/vue/2.6.11/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vant@2.6/lib/vant.min.js"></script>
+    <!-- 引入组件库 -->
+    <script src="http://127.0.0.1:3000/socket.io/socket.io.js"></script>
+    <script>
+        new Vue({
+            el: "#app",
+            data() {
+                return {
+                    newUser: "",
+                    localname: sessionStorage.getItem("user") || "",
+                    loginShow: true,
+                    socket: null,
+                    messageList: [],
+                    userNum: 0,
+                    sendMsg: {
+                        userName: sessionStorage.getItem("user")||"",
+                        msg: ""
+                    }
+                }
+            },
+            methods: {
+                submit() {
+                    if (this.sendMsg.userName) {
+                        this.localname = this.sendMsg.userName
+                        this.loginShow = false;
+                        sessionStorage.setItem("user", this.sendMsg.userName);
+                        this.socket.emit("login", this.sendMsg.userName); //emit对应服务器上的on监听事件 
+                    } else {
+                        alert("请输入昵称！")
+                    }
+                },
+                sendOut() {
+                    this.socket.emit("message", this.sendMsg);
+                    this.sendMsg.msg = ""
+                },
+                goOut() {
+                    this.loginShow = true;
+                    sessionStorage.removeItem("user")
+                    this.socket.emit("disconnect", this.sendMsg);
+                    console.log(666)
+                    this.sendMsg = {
+                        userName: "",
+                        msg: ""
+                    }
+                },
+                connecting() {
+                    this.socket = io.connect('ws://127.0.0.1:3000', {
+                        'reconnect': false,
+                        'auto connect': false
+                    });
+                    let _this = this;
+                    this.socket.on("message", (obj) => {
+                        _this.messageList = obj.msgList;
+                        _this.userNum = obj.num
+                    });
+                    this.socket.on("loginOk", (obj) => {
+                        console.log(obj)
+                        _this.newUser = obj.name;
+                        _this.userNum = obj.num;
+                        if (sessionStorage.getItem("user")) {
+                            this.loginShow = false;
+                            this.sendMsg.msg = "";
+                        } else {
+                            this.loginShow = true;
+                        }
+                        setTimeout(() => {
+                            _this.newUser = ""
+                        }, 3000)
+                    });
+                    if (sessionStorage.getItem("user")) {
+                        this.loginShow = false;
+                        this.sendMsg.msg = "";
+                    } else {
+                        this.loginShow = true;
+                    }
+                }
+            },
+            // computed: {
+            //     localname() {
+            //         return sessionStorage.getItem("user") || "";
+            //     }
+            // },
+            mounted() {
+                this.connecting()
+            },
+            created() {}
+        })
+    </script>
+</body>
+
+</html>
